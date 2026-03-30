@@ -4,7 +4,7 @@
 SPI_HandleTypeDef g_spi1_handle;
 
 /* SPI1 底层初始化
- * 你现在已经改为：
+ * 
  * PA5 -> SPI1_SCK
  * PA6 -> SPI1_MISO (DOUT/RDY)
  * PA7 -> SPI1_MOSI (DIN)
@@ -12,6 +12,7 @@ SPI_HandleTypeDef g_spi1_handle;
 static void ad7175_spi1_init(void)
 {
     __HAL_RCC_GPIOA_CLK_ENABLE();
+    __HAL_RCC_GPIOB_CLK_ENABLE();
     __HAL_RCC_SPI1_CLK_ENABLE();
 
     GPIO_InitTypeDef gpio_init_struct;
@@ -21,7 +22,14 @@ static void ad7175_spi1_init(void)
     gpio_init_struct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
     gpio_init_struct.Alternate = GPIO_AF5_SPI1;
     HAL_GPIO_Init(GPIOA, &gpio_init_struct);
-
+    
+    gpio_init_struct.Pin = GPIO_PIN_14;
+    gpio_init_struct.Mode = GPIO_MODE_OUTPUT_PP;
+    gpio_init_struct.Pull = GPIO_NOPULL;
+    gpio_init_struct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+    HAL_GPIO_Init(GPIOB, &gpio_init_struct);
+    
+    
     g_spi1_handle.Instance = SPI1;
     g_spi1_handle.Init.Mode = SPI_MODE_MASTER;
     g_spi1_handle.Init.Direction = SPI_DIRECTION_2LINES;
@@ -54,18 +62,31 @@ static void ad7175_spi1_init(void)
     HAL_SPI_Init(&g_spi1_handle);
 }
 
+/* 片选CS控制 */
+static void ad7175_cs_low(void)
+{
+    HAL_GPIO_WritePin(AD7175_CS_GPIO_PORT, AD7175_CS_GPIO_PIN, GPIO_PIN_RESET);
+}
+
+static void ad7175_cs_high(void)
+{
+    HAL_GPIO_WritePin(AD7175_CS_GPIO_PORT, AD7175_CS_GPIO_PIN, GPIO_PIN_SET);
+}
+
+
 /* 软件复位：DIN=1，连续送 64 个 SCLK */
 void ad7175_reset(void)
 {
-    uint8_t txbuf[8];
-    for (uint8_t i = 0; i < 8; i++)
+    uint8_t tx = 0xFF;
+    uint8_t rx = 0xFF;
+
+    ad7175_cs_low();
+    for (int i = 0; i < 10; i++)
     {
-        txbuf[i] = 0xFF;
+        HAL_SPI_TransmitReceive(&g_spi1_handle, &tx, &rx, 1, 1000);
     }
+    ad7175_cs_high();
 
-    HAL_SPI_Transmit(&g_spi1_handle, txbuf, 8, 1000);
-
-    /* 手册要求复位后至少等待 500us，这里放宽到 2ms */
     delay_ms(2);
 }
 
@@ -128,7 +149,24 @@ void ad7175_write_reg_16(uint8_t reg, uint16_t val)
 
 uint16_t ad7175_read_id(void)
 {
-    return ad7175_read_reg_16(AD7175_REG_ID);
+    uint16_t id = 0;
+    uint8_t tx = 0x47;
+    uint8_t rx = 0x00;
+
+    ad7175_cs_low();
+
+    HAL_SPI_TransmitReceive(&g_spi1_handle, &tx, &rx, 1, 1000);
+
+    tx = 0xFF;
+    HAL_SPI_TransmitReceive(&g_spi1_handle, &tx, &rx, 1, 1000);
+    id = ((uint16_t)rx << 8);
+
+    HAL_SPI_TransmitReceive(&g_spi1_handle, &tx, &rx, 1, 1000);
+    id |= rx;
+
+    ad7175_cs_high();
+
+    return id;
 }
 
 uint8_t ad7175_read_status(void)
