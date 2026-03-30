@@ -49,65 +49,65 @@ int main(void)
     printf("\r\n");
     printf("AD7175 test start!\r\n");
 
-    /* 第一步：只初始化并配置 */
+    /* 初始化 */
     ad7175_init();
     delay_ms(20);
 
-    /* 第二步：先做 10 次 ID 稳定性验证 */
+    /* 先做 10 次 ID 稳定性验证 */
     printf("---- ID test ----\r\n");
     for (int i = 0; i < 10; i++)
     {
         ad7175_reset();
         delay_ms(2);
 
-        id = ad7175_read_id();
+        uint16_t id = ad7175_read_id();
         printf("ID[%d] = 0x%04X\r\n", i, id);
         delay_ms(20);
     }
 
-    /* 第三步：读一次关键寄存器 */
-    printf("\r\n---- Register dump ----\r\n");
-    id      = ad7175_read_id();
-    status  = ad7175_read_status();
-    adcmode = ad7175_read_reg_16(AD7175_REG_ADCMODE);
-    ifmode  = ad7175_read_reg_16(AD7175_REG_IFMODE);
-    ch0     = ad7175_read_reg_16(AD7175_REG_CH0);
-    setup0  = ad7175_read_reg_16(AD7175_REG_SETUP0);
-    filt0   = ad7175_read_reg_16(AD7175_REG_FILT0);
+    /* 读关键寄存器 */
+//    printf("\r\n---- Register dump ----\r\n");
+//    id      = ad7175_read_id();
+//    status  = ad7175_read_status();
+//    adcmode = ad7175_read_reg_16(AD7175_REG_ADCMODE);
+//    ifmode  = ad7175_read_reg_16(AD7175_REG_IFMODE);
+//    ch0     = ad7175_read_reg_16(AD7175_REG_CH0);
+//    setup0  = ad7175_read_reg_16(AD7175_REG_SETUP0);
+//    filt0   = ad7175_read_reg_16(AD7175_REG_FILT0);
 
-    printf("ID      = 0x%04X\r\n", id);
-    printf("STATUS  = 0x%02X\r\n", status);
-    printf("ADCMODE = 0x%04X\r\n", adcmode);
-    printf("IFMODE  = 0x%04X\r\n", ifmode);
-    printf("CH0     = 0x%04X\r\n", ch0);
-    printf("SETUP0  = 0x%04X\r\n", setup0);
-    printf("FILT0   = 0x%04X\r\n", filt0);
+//    printf("ID      = 0x%04X\r\n", id);
+//    printf("STATUS  = 0x%02X\r\n", status);
+//    printf("ADCMODE = 0x%04X\r\n", adcmode);
+//    printf("IFMODE  = 0x%04X\r\n", ifmode);
+//    printf("CH0     = 0x%04X\r\n", ch0);
+//    printf("SETUP0  = 0x%04X\r\n", setup0);
+//    printf("FILT0   = 0x%04X\r\n", filt0);
 
-    /* 第四步：连续读数据
-     * 现在先不做电压换算，只看 DATA 是否稳定更新
+    /* 
+     * 只看 DATA 是否稳定更新
      */
-    printf("\r\n---- Data read ----\r\n");
+//    printf("\r\n---- Data read ----\r\n");
     
     
     
     
     while (1)
     {
-        status = ad7175_read_status();
+//        status = ad7175_read_status();
 
-        /* STATUS bit7 = RDY，0 表示有新数据 */
-        if ((status & 0x80) == 0)
-        {
-            data = ad7175_read_data();
-            printf("STATUS = 0x%02X, DATA = 0x%06lX\r\n", status, data);
+//        /* STATUS bit7 = RDY，0 表示有新数据 */
+//        if ((status & 0x80) == 0)
+//        {
+//            data = ad7175_read_data();
+//            printf("STATUS = 0x%02X, DATA = 0x%06lX\r\n", status, data);
 
-            LED0_TOGGLE();
-            delay_ms(100);
-        }
-        else
-        {
-            delay_ms(5);
-        }
+//            LED0_TOGGLE();
+//            delay_ms(100);
+//        }
+//        else
+//        {
+//            delay_ms(5);
+//        }
     }
         
 }
