@@ -24,18 +24,22 @@
 #include "./BSP/LED/led.h"
 #include "./BSP/AD7175/ad7175.h"
 
+
+/* 全局标志位 */
+volatile uint8_t g_adc_data_ready = 0;
+
 int main(void)
 {
-    uint8_t len;
-    uint16_t times = 0;
+//    uint8_t len;
+//    uint16_t times = 0;
     
     uint16_t id;
-    uint8_t  status;
-    uint16_t adcmode;
-    uint16_t ifmode;
-    uint16_t ch0;
-    uint16_t setup0;
-    uint16_t filt0;
+//    uint8_t  status;
+//    uint16_t adcmode;
+//    uint16_t ifmode;
+//    uint16_t ch0;
+//    uint16_t setup0;
+//    uint16_t filt0;
     uint32_t data;
     
     sys_cache_enable();                         /* 打开L1-Cache */
@@ -58,56 +62,109 @@ int main(void)
     for (int i = 0; i < 10; i++)
     {
         ad7175_reset();
-        delay_ms(2);
+        delay_ms(2);              
 
         uint16_t id = ad7175_read_id();
         printf("ID[%d] = 0x%04X\r\n", i, id);
         delay_ms(20);
     }
-
-    /* 读关键寄存器 */
-//    printf("\r\n---- Register dump ----\r\n");
-//    id      = ad7175_read_id();
-//    status  = ad7175_read_status();
-//    adcmode = ad7175_read_reg_16(AD7175_REG_ADCMODE);
-//    ifmode  = ad7175_read_reg_16(AD7175_REG_IFMODE);
-//    ch0     = ad7175_read_reg_16(AD7175_REG_CH0);
-//    setup0  = ad7175_read_reg_16(AD7175_REG_SETUP0);
-//    filt0   = ad7175_read_reg_16(AD7175_REG_FILT0);
-
-//    printf("ID      = 0x%04X\r\n", id);
-//    printf("STATUS  = 0x%02X\r\n", status);
-//    printf("ADCMODE = 0x%04X\r\n", adcmode);
-//    printf("IFMODE  = 0x%04X\r\n", ifmode);
-//    printf("CH0     = 0x%04X\r\n", ch0);
-//    printf("SETUP0  = 0x%04X\r\n", setup0);
-//    printf("FILT0   = 0x%04X\r\n", filt0);
-
-    /* 
-     * 只看 DATA 是否稳定更新
-     */
-//    printf("\r\n---- Data read ----\r\n");
     
     
+        
+    printf("\r\n---- Start 1-Second Sine Wave Capture (500 SPS) ----\r\n");
     
+    // 定义一个能装 100 个数据的缓存数组 (100个点在 500SPS 下相当于 0.2 秒的波形数据)
+    #define SAMPLE_COUNT 500
+    static float voltage_buffer[SAMPLE_COUNT];
     
     while (1)
     {
-//        status = ad7175_read_status();
+//        //  一次性拉低片选，开启连续高速采集通道
+//        HAL_GPIO_WritePin(GPIOB, GPIO_PIN_14, GPIO_PIN_RESET); 
+//        delay_ms(2); 
 
-//        /* STATUS bit7 = RDY，0 表示有新数据 */
-//        if ((status & 0x80) == 0)
-//        {
-//            data = ad7175_read_data();
-//            printf("STATUS = 0x%02X, DATA = 0x%06lX\r\n", status, data);
+//        // 假读一次，清空内部过期垃圾
+//        ad7175_read_data_no_cs();
 
-//            LED0_TOGGLE();
-//            delay_ms(100);
-//        }
-//        else
+//        // 极速纯净区块采集
+//        for (int i = 0; i < SAMPLE_COUNT; i++)
 //        {
-//            delay_ms(5);
+//            // 直接死等 PA6 (MISO) 物理引脚被 ADC 拉低
+//            while (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_6) == GPIO_PIN_SET) 
+//            {
+//                // 此时单片机专心等待
+//            }
+//            
+//            // 抓到低电平，说明新数据准备就绪，立刻读取！
+//            uint32_t data = ad7175_read_data_no_cs();
+//            
+//            // 新增 死等PA6恢复高电平，防止H7太快，在引脚还没来得及拉高时又冲进下一次循环造成双重触发
+//            while (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_6) == GPIO_PIN_RESET) 
+//            {
+//                // 此时单片机专心等待
+//            }
+//                
+//            // 换算并存入数组
+//            float adc_pin_vin = (((int32_t)data - 8388608) * 2.5f) / 8388608.0f;
+//            voltage_buffer[i] = (adc_pin_vin - (-0.0381f)) / (-0.4944f);
 //        }
+
+//        // 采集完毕，拉高片选，让总线休息
+//        HAL_GPIO_WritePin(GPIOB, GPIO_PIN_14, GPIO_PIN_SET); 
+
+//        // 打印这 100 个点
+//        for (int i = 0; i < SAMPLE_COUNT; i++)
+//        {
+//            printf("%.5f\r\n", voltage_buffer[i]);
+//        }
+//        
+//        printf("--- Batch %d Points Complete ---\r\n", SAMPLE_COUNT);
+//        
+//        delay_ms(5000);
+        // ==========================================
+        // 1. 采集前大扫除
+        // ==========================================
+        HAL_GPIO_WritePin(GPIOB, GPIO_PIN_14, GPIO_PIN_RESET); 
+        delay_ms(2); 
+        ad7175_read_data_no_cs(); // 扔掉过期数据
+        HAL_GPIO_WritePin(GPIOB, GPIO_PIN_14, GPIO_PIN_SET); 
+
+        // ==========================================
+        // 2. 严丝合缝的高速波形抓取 (CS 包含在循环内)
+        // ==========================================
+        for (int i = 0; i < SAMPLE_COUNT; i++)
+        {
+            // A. 拉低片选，等待本次转换完成
+            HAL_GPIO_WritePin(GPIOB, GPIO_PIN_14, GPIO_PIN_RESET); 
+            
+            // B. 死等下降沿 (新数据就绪)
+            while (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_6) == GPIO_PIN_SET) {} 
+            
+            // C. 读取数据
+            uint32_t data = ad7175_read_data_no_cs();
+            
+            // D. 【关键安全动作】拉高片选！强行复位引脚状态，杜绝连续读取的错位
+            HAL_GPIO_WritePin(GPIOB, GPIO_PIN_14, GPIO_PIN_SET); 
+
+            // E. 换算
+            float adc_pin_vin = (((int32_t)data - 8388608) * 2.5f) / 8388608.0f;
+            voltage_buffer[i] = (adc_pin_vin - (-0.0381f)) / (-0.4944f);
+        }
+
+        // ==========================================
+        // 3. 护航打印 (防止电脑串口助手爆缓存)
+        // ==========================================
+        for (int i = 0; i < SAMPLE_COUNT; i++)
+        {
+            printf("%.5f\r\n", voltage_buffer[i]);
+            // 【新增】：每次打印完歇 2 毫秒，彻底消灭 Excel 里的空格和乱码！
+            delay_ms(2); 
+        }
+        
+        printf("--- End of 1 Second Data ---\r\n");
+        
+        delay_ms(5000);
     }
         
 }
+
