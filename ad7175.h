@@ -35,6 +35,7 @@ void ad7175_reset(void);
 uint8_t  ad7175_read_reg_8(uint8_t reg);
 uint16_t ad7175_read_reg_16(uint8_t reg);
 uint32_t ad7175_read_reg_24(uint8_t reg);
+uint32_t ad7175_read_data_no_cs(void);
 
 void ad7175_write_reg_16(uint8_t reg, uint16_t val);
 
