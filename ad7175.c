@@ -8,6 +8,7 @@ SPI_HandleTypeDef g_spi1_handle;
  * PA5 -> SPI1_SCK
  * PA6 -> SPI1_MISO (DOUT/RDY)
  * PA7 -> SPI1_MOSI (DIN)
+ * PB14 -> SPI1_CS 
  */
 static void ad7175_spi1_init(void)
 {
@@ -16,18 +17,18 @@ static void ad7175_spi1_init(void)
     __HAL_RCC_SPI1_CLK_ENABLE();
 
     GPIO_InitTypeDef gpio_init_struct;
-    gpio_init_struct.Pin = GPIO_PIN_5 | GPIO_PIN_6 | GPIO_PIN_7;
+    gpio_init_struct.Pin = AD7175_SCLK_GPIO_PIN | AD7175_MISO_GPIO_PIN | AD7175_MOSI_GPIO_PIN;
     gpio_init_struct.Mode = GPIO_MODE_AF_PP;
     gpio_init_struct.Pull = GPIO_PULLUP;
     gpio_init_struct.Speed = GPIO_SPEED_FREQ_LOW;
     gpio_init_struct.Alternate = GPIO_AF5_SPI1;
-    HAL_GPIO_Init(GPIOA, &gpio_init_struct);
+    HAL_GPIO_Init(AD7175_SCLK_GPIO_PORT, &gpio_init_struct);
     
-    gpio_init_struct.Pin = GPIO_PIN_14;
+    gpio_init_struct.Pin = AD7175_CS_GPIO_PIN;
     gpio_init_struct.Mode = GPIO_MODE_OUTPUT_PP;
     gpio_init_struct.Pull = GPIO_PULLUP;
     gpio_init_struct.Speed = GPIO_SPEED_FREQ_LOW;
-    HAL_GPIO_Init(GPIOB, &gpio_init_struct);
+    HAL_GPIO_Init(AD7175_CS_GPIO_PORT, &gpio_init_struct);
     
     
     g_spi1_handle.Instance = SPI1;
@@ -61,16 +62,6 @@ static void ad7175_spi1_init(void)
     
     HAL_SPI_Init(&g_spi1_handle);
     
-    /* 配置 PA4 为外部中断下降沿触发，用来接收 RDY 信号 */
-    GPIO_InitTypeDef gpio_exti_struct;
-    gpio_exti_struct.Pin = GPIO_PIN_4;
-    gpio_exti_struct.Mode = GPIO_MODE_IT_FALLING; // 下降沿触发中断
-    gpio_exti_struct.Pull = GPIO_PULLUP;          // 开启上拉，防止悬空误触发
-    HAL_GPIO_Init(GPIOA, &gpio_exti_struct);
-    
-    /* 设置中断优先级并使能 EXTI4 中断 */
-    HAL_NVIC_SetPriority(EXTI4_IRQn, 2, 0);       // 优先级设为2 (可根据需要调整)
-//    HAL_NVIC_EnableIRQ(EXTI4_IRQn);
     
 }
 
@@ -241,6 +232,7 @@ void ad7175_init(void)
     020B=01011 即为500SPS */
     ad7175_write_reg_16(0x28, 0x020B); 
     delay_ms(2);
+    
     
     
 }
