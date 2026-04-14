@@ -5,17 +5,21 @@
 #include "stm32h7xx_hal.h"
 
 /* 引脚定义 */
+// SPI1_CS
 #define AD7175_CS_GPIO_PORT      GPIOB
 #define AD7175_CS_GPIO_PIN       GPIO_PIN_14
 
-//#define AD7175_SCLK_GPIO_PORT    GPIOB
-//#define AD7175_SCLK_GPIO_PIN     GPIO_PIN_3
+// SPI1_SCLK
+#define AD7175_SCLK_GPIO_PORT    GPIOA
+#define AD7175_SCLK_GPIO_PIN     GPIO_PIN_5
 
-//#define AD7175_MISO_GPIO_PORT    GPIOB
-//#define AD7175_MISO_GPIO_PIN     GPIO_PIN_4
+// SPI1_MISO(DOUT/RDY)
+#define AD7175_MISO_GPIO_PORT    GPIOA
+#define AD7175_MISO_GPIO_PIN     GPIO_PIN_6
 
-//#define AD7175_MOSI_GPIO_PORT    GPIOB
-//#define AD7175_MOSI_GPIO_PIN     GPIO_PIN_5
+// SPI1_MOSI(DIN)
+#define AD7175_MOSI_GPIO_PORT    GPIOA
+#define AD7175_MOSI_GPIO_PIN     GPIO_PIN_7
 
 /* 寄存器地址 */
 #define AD7175_REG_STATUS        0x00  // 状态寄存器 (8位，只读)
