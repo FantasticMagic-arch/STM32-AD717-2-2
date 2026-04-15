@@ -237,24 +237,27 @@ void ad7175_init(void)
     
 }
 
-// 没用这个函数
-// 将 24位 Code 转换为实际电压值 (双极性，2.5V内部基准)
-float ad7175_code_to_voltage(uint32_t code)
+/* AD7175-2 内部环境温漂自校准函数 */
+void ad7175_environmental_auto_cal(void)
 {
-    int32_t signed_code = (int32_t)code - 0x800000;
-    return ((float)signed_code * 2.5f) / 8388608.0f;
-}
+    /* 1. 触发内部零点自校准 (Internal Zero-Scale Calibration)
+     * ADCMODE 寄存器(0x01) 位[6:4] 设置为 100
+     * 结合你原有的 REF_EN (位15 = 1)，写入 0x8040
+     */
+    ad7175_write_reg_16(0x01, 0x8040);
+    delay_ms(150); // 500SPS 速率下，内部校准需要留出充足的建立时间
 
-// 专为高速连续采集定制的无 CS 翻转读取函数
-uint32_t ad7175_read_data_no_cs(void)
-{
-    // 直接发送读取数据寄存器(0x04)的指令，后跟3个字节的虚拟时钟
-    uint8_t txbuf[4] = {0x44, 0xFF, 0xFF, 0xFF}; 
-    uint8_t rxbuf[4] = {0};
+    /* 2. 触发内部满量程自校准 (Internal Full-Scale Calibration)
+     * ADCMODE 寄存器(0x01) 位[6:4] 设置为 101
+     * 结合 REF_EN，写入 0x8050
+     */
+    ad7175_write_reg_16(0x01, 0x8050);
+    delay_ms(150);
 
-    // 绝不拉高拉低 CS，杜绝一切电平跳变带来的电磁干扰！直接收发！
-    HAL_SPI_TransmitReceive(&g_spi1_handle, txbuf, rxbuf, 4, 1000);
-
-    return ((uint32_t)rxbuf[1] << 16) | ((uint32_t)rxbuf[2] << 8) | rxbuf[3];
+    /* 3. 恢复连续转换模式 (Continuous Conversion Mode)
+     * 恢复为系统初始化的设定值 0x8000
+     */
+    ad7175_write_reg_16(0x01, 0x8000);
+    delay_ms(20);
 }
 
