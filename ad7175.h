@@ -4,6 +4,12 @@
 #include "./SYSTEM/sys/sys.h"
 #include "stm32h7xx_hal.h"
 
+/* 内部基准电压 */
+#define AD7175_VREF 2.5f
+
+/* 24位ADC双极性偏移量 */
+#define AD7175_HALF_SCALE 8388608.0f
+
 /* 引脚定义 */
 // SPI1_CS
 #define AD7175_CS_GPIO_PORT      GPIOB
@@ -35,6 +41,7 @@
 /* 函数声明 */
 void ad7175_init(void);
 void ad7175_reset(void);
+void ad7175_environmental_auto_cal(void);
 
 uint8_t  ad7175_read_reg_8(uint8_t reg);
 uint16_t ad7175_read_reg_16(uint8_t reg);
