@@ -160,6 +160,7 @@ void ad7175_write_reg_16(uint8_t reg, uint16_t val)
     delay_ms(1);
 }
 
+/* 读取ID */
 uint16_t ad7175_read_id(void)
 {
     uint16_t id = 0;
@@ -237,26 +238,29 @@ void ad7175_init(void)
     
 }
 
+/* 专为高速连续采集定制的无 CS 翻转读取函数 */
+uint32_t ad7175_read_data_no_cs(void)
+{
+    // 直接发送读取数据寄存器(0x04)的指令，后跟3个字节的虚拟时钟
+    uint8_t txbuf[4] = {0x44, 0xFF, 0xFF, 0xFF}; 
+    uint8_t rxbuf[4] = {0};
+
+    // 绝不拉高拉低 CS，杜绝一切电平跳变带来的电磁干扰！直接收发！
+    HAL_SPI_TransmitReceive(&g_spi1_handle, txbuf, rxbuf, 4, 1000);
+
+    return ((uint32_t)rxbuf[1] << 16) | ((uint32_t)rxbuf[2] << 8) | rxbuf[3];
+}
+
 /* AD7175-2 内部环境温漂自校准函数 */
 void ad7175_environmental_auto_cal(void)
 {
-    /* 1. 触发内部零点自校准 (Internal Zero-Scale Calibration)
-     * ADCMODE 寄存器(0x01) 位[6:4] 设置为 100
-     * 结合你原有的 REF_EN (位15 = 1)，写入 0x8040
+    /* 触发内部零点自校准 (Internal Zero-Scale Calibration)
+     * ADCMODE 寄存器(0x01) 位[6:4] 设置为 100，结合 REF_EN，写入 0x8040
      */
     ad7175_write_reg_16(0x01, 0x8040);
-    delay_ms(150); // 500SPS 速率下，内部校准需要留出充足的建立时间
+    delay_ms(150); // 留出充足的建立时间
 
-    /* 2. 触发内部满量程自校准 (Internal Full-Scale Calibration)
-     * ADCMODE 寄存器(0x01) 位[6:4] 设置为 101
-     * 结合 REF_EN，写入 0x8050
-     */
-    ad7175_write_reg_16(0x01, 0x8050);
-    delay_ms(150);
-
-    /* 3. 恢复连续转换模式 (Continuous Conversion Mode)
-     * 恢复为系统初始化的设定值 0x8000
-     */
+    /* 恢复连续转换模式 (Continuous Conversion Mode) -> 0x8000 */
     ad7175_write_reg_16(0x01, 0x8000);
     delay_ms(20);
 }
