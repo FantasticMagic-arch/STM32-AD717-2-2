@@ -31,21 +31,22 @@
 #include "./MALLOC/malloc.h"
 #include "./BSP/SDMMC/sdmmc_sdcard.h"
 
-    // 只能放在main函数上面，因为中断回调函数在main函数之外定义的，所以需要全局定义变量
-    #define SAMPLE_COUNT 500  // 定义一个能装 500 个数据的缓存数组 用于暂时存储500个数据
-    static float voltage_buffer[SAMPLE_COUNT];
-    
-    // 双缓冲(Ping-Pong Buffer)数据结构
-    volatile float ping_buffer[SAMPLE_COUNT];
-    volatile float pong_buffer[SAMPLE_COUNT];
-    
-    volatile uint16_t buffer_index = 0;      
-    volatile uint8_t  current_buffer = 0;    // 0: 正在向 ping 写入; 1: 正在向 pong 写入
-    
-    // 标志位：通知 main 函数哪个数组满了可以存入 SD 卡
-    volatile uint8_t ping_ready_to_write = 0; 
-    volatile uint8_t pong_ready_to_write = 0;
-    
+/* 只能放在main函数上面，因为中断回调函数在main函数之外定义的，所以需要全局定义变量 */
+#define SAMPLE_COUNT 500  // 定义一个能装 500 个数据的缓存数组 用于暂时存储500个数据
+static float voltage_buffer[SAMPLE_COUNT];
+
+/* 双缓冲(Ping-Pong Buffer)数据结构 */
+volatile float ping_buffer[SAMPLE_COUNT];
+volatile float pong_buffer[SAMPLE_COUNT];
+
+volatile uint16_t buffer_index = 0;      
+volatile uint8_t  current_buffer = 0;    // 0: 正在向 ping 写入; 1: 正在向 pong 写入
+
+/* 标志位：通知 main 函数哪个数组满了可以存入 SD 卡 */
+volatile uint8_t ping_ready_to_write = 0; 
+volatile uint8_t pong_ready_to_write = 0;
+
+
     /* ================= 数据导出函数 ================= */
 //void dump_sd_data_to_serial(void)
 //{
@@ -97,11 +98,10 @@ int main(void)
     FATFS fs;           /* FatFS 逻辑驱动器工作区 */
     FIL file;           /* 文件对象 */
     UINT bw;            /* 实际写入的字节数 */
-    /* 用于精确时间采集 */
+    
+    /* 用于控制采集时间 */
     uint32_t total_saved_points = 0;
-    const uint32_t TARGET_POINTS = 1000; // 设定目标采集点数 (5秒 = 2500点)
-    
-    
+    const uint32_t TARGET_POINTS = 1000; // 设定目标采集点数 (1秒500个点,eg：1000个点为2秒)
     
     
     sys_cache_enable();                         /* 打开L1-Cache */
@@ -125,43 +125,48 @@ int main(void)
     /* 调用数据导出函数 */ //没有SD读卡器，暂且先用
 //    dump_sd_data_to_serial();
     
-    /* 数据导出时，需要把存入时的代码全都注释 */
+    // 数据导出时，需要把存入时的代码全都注释 
     
-    /* 初始化ADC */
+    /* 1、初始化ADC系统 */
     ad7175_init();
     delay_ms(20);
-    exti4_init();
-
-    /* ID 验证 (之前让你删除了复位代码，这里只读 ID) */
+    
+    /* 2、ID 验证 */
     uint16_t id = ad7175_read_id();
     printf("AD7175 ID = 0x%04X\r\n", id);
+    
+    /* 3、执行环境零点自校准 */
+    printf("Executing Internal Zero-Scale Calibration...\r\n");
+    ad7175_environmental_auto_cal();
+    printf("Calibration Done.\r\n");
+    
+    /* 4、初始化外部中断并开始采集 */
+    exti4_init();
+
+
     
     /* 创建波形存储文件 (直接以二进制写入，最高效) */
     /* FA_CREATE_ALWAYS这个宏定义再FatFS文件系统中的逻辑是：如果卡里没有这个文件，就新建一个；
     如果卡里已经有了同名文件，就直接将其强制清空为 0 字节，然后从头开始写。 */
     if (f_open(&file, "0:SIP_Data.bin", FA_CREATE_ALWAYS | FA_WRITE) != FR_OK) 
-        {
+    {
         printf("File Open Failed!\r\n");
         while(1); 
-        }
+    }
     printf("File Opened. Start 500SPS continuous capture...\r\n");
 
-    /* ================= 核心启动动作 ================= */
-    // 1. 拉低片选，并且在随后的运行中永远不再拉高！
-    // 只有 CS 保持低电平，AD7175 才会乖乖地按照 500SPS 在 RDY 引脚输出中断脉冲。
+    
+    /* 拉低片选，准备接收数据 */
     HAL_GPIO_WritePin(GPIOB, GPIO_PIN_14, GPIO_PIN_RESET); 
-    
-    // 2. 扔掉内部的第一组过期残余数据，清理 SPI 总线
     delay_ms(2);
-    ad7175_read_data_no_cs();
+    ad7175_read_data_no_cs(); // 清理残余数据
     
-    // 3. 精准放开中断
+    
     __HAL_GPIO_EXTI_CLEAR_IT(GPIO_PIN_4); // 清除配置期间 MISO 翻转产生的任何虚假中断标志
     HAL_NVIC_EnableIRQ(EXTI4_IRQn);       // 此时才真正开启 EXTI4 中断，迎接纯净的 RDY 脉冲
-    
     printf("Start Capture...\r\n");
     
-    /* 结束注释 */
+    // 结束注释 
     
     
     
@@ -170,71 +175,73 @@ int main(void)
         /* 同样注释掉 */
 
         if (ping_ready_to_write) 
-            {
-                f_write(&file, (void*)ping_buffer, sizeof(ping_buffer), &bw);
-                f_sync(&file); 
-                ping_ready_to_write = 0; 
-                
-                total_saved_points += SAMPLE_COUNT; // 累加已保存的点数
-                printf("Saved %d / %d points\r\n", total_saved_points, TARGET_POINTS);
-            }
+        {
+            f_write(&file, (void*)ping_buffer, sizeof(ping_buffer), &bw);
+            f_sync(&file); 
+            ping_ready_to_write = 0; 
+            
+            total_saved_points += SAMPLE_COUNT; // 累加已保存的点数
+            printf("Saved %d / %d points\r\n", total_saved_points, TARGET_POINTS);
+        }
         
         if (pong_ready_to_write) 
-            {
-                f_write(&file, (void*)pong_buffer, sizeof(pong_buffer), &bw);
-                f_sync(&file); 
-                pong_ready_to_write = 0; 
+        {
+            f_write(&file, (void*)pong_buffer, sizeof(pong_buffer), &bw);
+            f_sync(&file); 
+            pong_ready_to_write = 0; 
                 
-                total_saved_points += SAMPLE_COUNT;
-                printf("Saved %d / %d points\r\n", total_saved_points, TARGET_POINTS);
-            }
+            total_saved_points += SAMPLE_COUNT;
+            printf("Saved %d / %d points\r\n", total_saved_points, TARGET_POINTS);
+        }
 
         // 检查是否达到目标采集量
         if (total_saved_points >= TARGET_POINTS)
-            {
-                f_close(&file); // 【最关键的安全动作】：安全封口，关闭文件！
-                
-                // 停止 AD7175 转换 (拉高片选，关闭中断)
-                HAL_GPIO_WritePin(GPIOB, GPIO_PIN_14, GPIO_PIN_SET); 
-                HAL_NVIC_DisableIRQ(EXTI4_IRQn);
-                
-                printf("--- Capture Complete. File safely closed. ---\r\n");
+        {
+            f_close(&file); //安全封口，关闭文件
             
-                // 进入死循环挂机，等待人工断电
-                while(1)
-                {
-                    LED0_TOGGLE();
-                    delay_ms(200); // 快闪表示完成
-                }
+            // 停止 AD7175 转换 (拉高片选，关闭中断)
+            HAL_GPIO_WritePin(GPIOB, GPIO_PIN_14, GPIO_PIN_SET); 
+            HAL_NVIC_DisableIRQ(EXTI4_IRQn);
+            
+            printf("--- Capture Complete. File safely closed. ---\r\n");
+            
+            
+            while(1)
+            {
+                LED0_TOGGLE();
+                delay_ms(200); // 快闪表示完成
             }
+         }
         /* 结束注释 */
     }
         
 }
 
 
-/* 外部中断回调函数（硬件自动调用） */
+/* 外部中断回调函数 */
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
     if (GPIO_Pin == GPIO_PIN_4) 
     {
-        // 1. 读取数据（此时 DOUT 线上会有剧烈的高低电平跳变发送数据）
+        // 1. 读取数据
         uint32_t data = ad7175_read_data_no_cs();
         
-        // 清除刚才读取数据期间，DOUT 数据位跳变在 PA4 上留下的所有虚假中断标志！
-        // 只有加上这一句，单片机才不会陷入无限中断的死胡同。
+        // 清除刚才读取数据期间，DOUT 数据位跳变在 PA4 上留下的所有虚假中断标志
         __HAL_GPIO_EXTI_CLEAR_IT(GPIO_PIN_4); 
 
         // 2. 换算电压
-        float adc_pin_vin = (((int32_t)data - 8388608) * 2.5f) / 8388608.0f;
+        float adc_pin_vin = (((int32_t)data - AD7175_HALF_SCALE) * AD7175_VREF) / AD7175_HALF_SCALE;
         //0.0381是零点偏置；0.4944是增益斜率；1.0195是硬件校准系数。
-        float final_voltage = (adc_pin_vin - (-0.0381f)) / (-0.4944f)* 1.0195f;
+//        float final_voltage = (adc_pin_vin - (-0.0381f)) / (-0.4944f)* 1.0195f;
 
         // 3. 填入当前正在使用的缓冲区
-        if (current_buffer == 0) {
-            ping_buffer[buffer_index] = final_voltage;
-        } else {
-            pong_buffer[buffer_index] = final_voltage;
+        if (current_buffer == 0) 
+        {
+            ping_buffer[buffer_index] = adc_pin_vin;
+        }
+        else
+        {
+            pong_buffer[buffer_index] = adc_pin_vin;
         }
         
         buffer_index++;
@@ -243,16 +250,20 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
         if (buffer_index >= SAMPLE_COUNT) 
         {
             buffer_index = 0;
-            if (current_buffer == 0) {
+            if (current_buffer == 0) 
+            {
                 ping_ready_to_write = 1; 
                 current_buffer = 1;      
-            } else {
+            }
+            else
+            {
                 pong_ready_to_write = 1; 
                 current_buffer = 0;      
             }
         }
     }
 }
+
 
 
 
