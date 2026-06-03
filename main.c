@@ -105,6 +105,7 @@ int main(void)
     
     
     sys_cache_enable();                         /* 打开L1-Cache */
+//    SCB_DisableDCache();                        /* 强制关闭数据缓存，防止 SD卡 DMA 搬运出错卡死 */
     HAL_Init();                                 /* 初始化HAL库 */
     sys_stm32_clock_init(160, 5, 2, 4);         /* 设置时钟, 400Mhz */
     delay_init(400);                            /* 延时初始化 */
@@ -150,7 +151,7 @@ int main(void)
     如果卡里已经有了同名文件，就直接将其强制清空为 0 字节，然后从头开始写。 */
     if (f_open(&file, "0:SIP_Data.bin", FA_CREATE_ALWAYS | FA_WRITE) != FR_OK) 
     {
-        printf("File Open Failed!\r\n");
+        printf("File Open Failed!\r\n"); 
         while(1); 
     }
     printf("File Opened. Start 500SPS continuous capture...\r\n");
@@ -181,6 +182,7 @@ int main(void)
             ping_ready_to_write = 0; 
             
             total_saved_points += SAMPLE_COUNT; // 累加已保存的点数
+//            printf("Ping Buffer OK: %d / %d points\r\n", total_saved_points, TARGET_POINTS);
             printf("Saved %d / %d points\r\n", total_saved_points, TARGET_POINTS);
         }
         
@@ -191,6 +193,7 @@ int main(void)
             pong_ready_to_write = 0; 
                 
             total_saved_points += SAMPLE_COUNT;
+//            printf("Pong Buffer OK: %d / %d points\r\n", total_saved_points, TARGET_POINTS);
             printf("Saved %d / %d points\r\n", total_saved_points, TARGET_POINTS);
         }
 
