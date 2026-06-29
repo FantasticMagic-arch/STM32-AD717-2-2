@@ -10,5 +10,8 @@
 /* 外部中断初始化函数 */
 void exti4_init(void);
 
+/* PA0外部中断（同步脉冲）初始化函数 */
+void sync_exti_init(void);
+
 #endif
 
