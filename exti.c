@@ -30,3 +30,25 @@ void EXTI4_IRQHandler(void)
     HAL_GPIO_EXTI_IRQHandler(AD7175_EXIT_GPIO_PIN); 
 }
 
+
+/* PD3 外部中断初始化 (专门接收发射机的同步脉冲) */
+void sync_exti_init(void)
+{
+    GPIO_InitTypeDef gpio_exti_struct;
+    __HAL_RCC_GPIOD_CLK_ENABLE(); // 开启GPIOD时钟
+
+    gpio_exti_struct.Pin = GPIO_PIN_3;            // 使用引脚 3
+    gpio_exti_struct.Mode = GPIO_MODE_IT_RISING;  // 上升沿触发
+    gpio_exti_struct.Pull = GPIO_PULLDOWN;        // 下拉
+    HAL_GPIO_Init(GPIOD, &gpio_exti_struct);      // 
+
+    HAL_NVIC_SetPriority(EXTI3_IRQn, 1, 0);       // 改成 EXTI3_IRQn
+    HAL_NVIC_EnableIRQ(EXTI3_IRQn);               // 改成 EXTI3_IRQn
+}
+
+/* PD3 的硬件中断入口 */
+void EXTI3_IRQHandler(void)                   // 改成 EXTI3_IRQHandler
+{
+    HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_3);     // 改成 GPIO_PIN_3
+}
+
